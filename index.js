@@ -12,6 +12,7 @@ var unformatTime = require('./utils/unformat-time');
 var debug = require('debug')('castnow');
 var debouncedSeeker = require('debounced-seeker');
 var noop = function() {};
+var load_and_store = require('./utils/load-and-store.js');
 
 // plugins
 var directories = require('./plugins/directories');
@@ -168,7 +169,7 @@ var ctrl = function(err, p, ctx) {
           !status.media.metadata.title) return;
 
       var metadata = status.media.metadata;
-      var title;
+
       if (metadata.artist) {
         title = metadata.artist + ' - ' + metadata.title;
       } else {
@@ -185,6 +186,19 @@ var ctrl = function(err, p, ctx) {
     debug('seeking to %s', seconds);
     p.seek(seconds);
   };
+
+    p.getStatus(function(err, status) {
+        if (!status || !status.media || !status.media.metadata || !status.media.metadata.title) return;
+
+        var metadata = status.media.metadata;
+
+
+        var title = metadata.title;
+        var last_seen_seek = load_and_store.get(title);
+        if(last_seen_seek != -1)){
+            p.seek(last_seen_seek)
+        }
+    }
 
   p.on('playing', updateTitle);
 
@@ -302,7 +316,20 @@ var ctrl = function(err, p, ctx) {
 
     // quit
     q: function() {
-      process.exit();
+      //before you quit, find the last played time.
+        var last_seek_time = p.getPoition();
+        p.getStatus(function(err, status) {
+            if (!status || !status.media || !status.media.metadata || !status.media.metadata.title) return;
+
+            var metadata = status.media.metadata;
+            var title;
+            title = metadata.title;
+            console.log(" Storing the title: ",title);
+            console.log(" Last seek time: ",last_seek_time);
+            load_and_store.store(title,last_seek_time);
+        }
+
+        process.exit();
     },
 
     // Rewind, one "seekCount" per press
